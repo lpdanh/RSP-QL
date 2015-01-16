@@ -1,0 +1,157 @@
+LSBench : https://code.google.com/p/lsbench/
+Technical description :http://link.springer.com/chapter/10.1007/978-3-642-35173-0_20#page-1
+
+
+Q1:  Notify  of posts posted by a user identified by account id
+SELECT?p ?o
+WHERE{ 
+  STREAM <http://deri.org/poststream> [RANGE 1s] 
+   {<http://www.ins.cwi.nl/sib/user/u984> ?p ?o.}}
+   
+Q2 : Notify of  posts posted by a user identified by a URI
+PREFIX sioc: <http://rdfs.org/sioc/ns#>
+SELECT ?post
+WHERE{ 
+  STREAM <http://deri.org/poststream> [RANGE 1s]   {?user sioc:creator_of ?post.}
+  ?user sioc:account_of <http://www.ins.cwi.nl/sib/person/p984>. }}
+  
+Q3: Notify of  posts posted by friends of a user
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX sioc: <http://rdfs.org/sioc/ns#>
+SELECT ?friend ?post
+WHERE{ 
+  STREAM <http://deri.org/poststream> [RANGE 2 hours] { ?friend sioc:creator_of ?post.}
+  ?user foaf:knows ?friend.  ?user sioc:account_of <http://www.ins.cwi.nl/sib/person/p984>.}}
+  
+Q4: Notify the recent posts that have the same tag within 2 hours
+ 
+PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+PREFIX sioc: <http://rdfs.org/sioc/ns#> 
+  SELECT ?post1 ?post2 ?tag
+WHERE{ 
+  STREAM <http://deri.org/poststream> [RANGE 15s]
+  {?post1 sib:hashtag ?tag. ?user sioc:creator_of ?post1.} 
+  STREAM <http://deri.org/poststream> [RANGE 15s]
+  {?post2 sib:hashtag ?tag. ?user sioc:creator_of ?post2.}
+  FILTER(?post1 !=?post2)}}
+  
+  Q5. Notify if a user has been tagged in a photo (within a day that a friend of his/her
+has liked the photo
+
+PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+SELECT ?friend1 ?friend2 ?photo
+WHERE{ 
+  STREAM <http://deri.org/likedphotostream> [RANGE 15 minutes]
+  {?friend2 sib:like ?photo. }
+  STREAM <http://deri.org/photostream> [RANGE 1 days ]
+  {?photo sib:usertag ?friend1.}
+  ?friend1 foaf:knows ?friend2.
+}
+
+Q6 :Notify a person that all comments
+on a post of a channel that he/she is subscribed to, have been liked by one
+of his/her friends
+
+PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX sioc: <http://rdfs.org/sioc/ns#>
+SELECT ?user ?friend ?comment ?channel
+WHERE{ 
+  STREAM <http://deri.org/poststream> [RANGE 1m]
+  {   ?channel sioc:container_of ?post. ?comment sioc:reply_of ?post. }
+  STREAM <http://deri.org/likedpoststream> [RANGE 100ms]
+  {?friend sib:like ?comment.}
+  ?user foaf:knows ?friend. 
+  ?user sioc:subscriber_of ?channel.}}
+  
+
+Q7: Notify a user of all the friends having been tagged in a photo taken close to his current location
+within 1 day and the photo has been liked by someone in the last 15 minutes
+
+PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?friend ?photo
+WHERE {
+   STREAM <http://deri.org/photostream> [RANGE 2 hours] 
+        { ?photo sib:lat ?lat1. ?photo sib:lon ?lon1.?photo sib:usertag ?friend}
+   STREAM <http://deri.org/likedphotostream> [RANGE 15 minutes] 
+      { ?someone sib:like ?photo}	
+   STREAM <http://deri.org/gpsstream> [60 seconds] 
+       { ?user sib:trackedAt ?trackedLoc. ?trackLoc sib:lat ?lat2 .?trackLoc sib:lon ?lon2}
+   GRAPH <http://deri.org/userprofile/>
+       {?user foaf:name "$name$". ?user foaf:knows ?friend.}	
+   FILTER ((?lat1-?lat2)*(?lat1-lat2)+(lon1-lon2)*(lon1-lon2)<$distance$*$distance$) 
+}}
+
+Q8: Notify a person tagged in photo of  a
+person that has liked the photo but is not in the person's friend list
+
+PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+SELECT ?friend1 ?friend2 
+WHERE {
+    STREAM <http://deri.org/photostream> [RANGE 2 hours] 
+	{ ?photo sib:usertag ?friend1}
+    STREAM <http://deri.org/ikedphotostream> [RANGE 5 minutes] 
+ 	{ friend2 sib:like ?photo}	
+    FILTER NOT EXISTS  {?friend2 foaf:knows ?friend1}	
+  }
+  }
+
+Q9: Notify a user of all the posts and photos liked by friends of his/her friends
+  PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?post
+WHERE {
+    {STREAM <http://deri.org/photostream> [RANGE 20 minutes] {?friendofriend sib:like ?post} 
+    UNION
+    STREAM <http://deri.org/poststream> [RANGE 20 minutes] {?friendofriend sib:like ?post} 
+    } 
+    GRAPH<http://deri.org/userprofile/> 
+       {:me foaf:knows ?friend. ?friend :knows ?friendofriend.} 
+}
+
+Q10: Count the number of posts with a certain hash tag within 20 minutes
+PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+SELECT ?hashTag count(?post)
+WHERE{
+     STREAM <http://deri.org/poststream> [RANGE  20 minutes] 
+      {?post sib:hashTag ?hashTag}
+}	
+GROUP BY ?hashTag
+
+Q11: Update the maximum number of users having liked a post
+    
+PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+PREFIX dc:  <http://purl.org/dc/elements/1.1/>
+SELECT ?creator MAX(?userlike)
+WHERE
+{
+   SELECT ?creator ?post (COUNT(?user) AS ?userlike)
+   WHERE{	
+   STREAM <http://deri.org/poststream> [RANGE  2 hours] 
+	{?post dc:creator ?creator}
+   STREAM  <http://deri.org/likedpoststream> [RANGE  2 hours]
+         {?user sib:like ?post}
+    }
+    GROUP BY ?creator, ?post 	
+}
+GROUP BY ?creator
+
+Q12:  Get the 10 most used tags within two hours
+PREFIX sib:  <http://www.ins.cwi.nl/sib/vocabulary/>
+SELECT ?tag count(?post) as ?numPost
+WHERE
+{
+    STREAM <http://deri.org/poststream>[Range 2 hours]
+    {    ?post sib:hashtag ?tag }
+}
+GROUP BY ?tag
+ORDER BY DESC(?numPost)
+LIMIT 10
+
+
+
