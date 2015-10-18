@@ -165,4 +165,4 @@ Beck, H., Dao-Tran, M., Eiter, T., Fink, M. In AAAI. 2015.
     [:startsAt "2015-06-18T12:00:00"^^xsd:dateTime;
     :endsAt "2015-06-18T13:00:00"^^xsd:dateTime]
 ```    
-
+> Allow time point and time instance?
